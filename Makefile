@@ -16,7 +16,15 @@ QSTR_GEN_CFLAGS = $(INC)
 QSTR_GEN_CXXFLAGS = $(INC)
 
 CFLAGS = -target x86_64-none-elf $(INC) -nostdlib -ffreestanding -fno-stack-protector -fno-pic -mabi=sysv -mcmodel=kernel -mno-red-zone -msoft-float $(CFLAGS_EXTRA)
-LDFLAGS = -nostdlib -Tsrc/linker.ld -melf_x86_64 -z max-page-size=0x1000 -static
+LDFLAGS = -nostdlib -Tsrc/linker.ld -melf_x86_64 -z max-page-size=0x1000 -static --gc-sections
+
+ifeq ($(DEBUG), 1)
+CFLAGS += -O0 -ggdb
+else
+CFLAGS += -Os -DNDEBUG
+CFLAGS += -fdata-sections -ffunction-sections
+endif
+
 CXXFLAGS += $(filter-out -std=c99,$(CFLAGS))
 CXXFLAGS += $(CXXFLAGS_MOD)
 CFLAGS += $(CFLAGS_MOD)

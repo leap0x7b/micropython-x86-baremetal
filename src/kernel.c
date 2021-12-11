@@ -10,8 +10,8 @@
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
 
-static uint8_t stack[8192];
-static uint8_t heap[8192];
+static uint8_t stack[0x8000];
+static uint8_t heap[0x4000];
 void (*term_write)(const char *string, size_t length);
 
 static struct stivale2_header_tag_terminal terminal_hdr_tag = {
@@ -70,8 +70,19 @@ void _start(struct stivale2_struct *stivale2_struct) {
 
     idt_init();
 
+    #if MICROPY_ENABLE_PYSTACK
+    static mp_obj_t pystack[1024];
+    mp_pystack_init(pystack, &pystack[1024]);
+    #endif
+
+    #if MICROPY_STACK_CHECK
+    mp_stack_ctrl_init();
+    mp_stack_set_limit(sizeof(stack));
+    #endif
+
     gc_init(heap, heap + sizeof(heap));
     mp_init();
+
     #if MICROPY_REPL_EVENT_DRIVEN
     pyexec_event_repl_init();
     for (;;) {
@@ -83,17 +94,18 @@ void _start(struct stivale2_struct *stivale2_struct) {
     #else
     pyexec_friendly_repl();
     #endif
+
+    gc_sweep_all();
     mp_deinit();
 
-    for (;;) {
-        asm ("hlt");
+    while (1) {
+        asm("hlt");
     }
 }
 
 void gc_collect(void) {
-    void *dummy;
     gc_collect_start();
-    gc_collect_root(&dummy, ((mp_uint_t)&dummy - (mp_uint_t)stack) / sizeof(mp_uint_t));
+    gc_helper_collect_regs_and_stack();
     gc_collect_end();
 }
 
@@ -111,13 +123,16 @@ mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs) 
 MP_DEFINE_CONST_FUN_OBJ_KW(mp_builtin_open_obj, 1, mp_builtin_open);
 
 void nlr_jump_fail(void *val) {
+    term_write("ERROR: JumpFail", 16);
     while (1) {
-        ;
+        asm("hlt");
     }
 }
 
 void NORETURN __fatal_error(const char *msg) {
+    term_write("ERROR: ", 8);
+    term_write(msg, strlen(msg));
     while (1) {
-        ;
+        asm("hlt");
     }
 }
